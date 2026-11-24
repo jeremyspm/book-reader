@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en-NZ">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Book import test</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 20px auto; padding: 0 16px; line-height: 1.45; color: #1d2127; }
+  h1 { font-size: 22px; } .box { background: #f4f5f7; border-radius: 10px; padding: 12px 14px; margin: 12px 0; }
+  button, label.btn { font: inherit; padding: 10px 16px; border-radius: 8px; border: 1px solid #c9cdd3; background: #fff; cursor: pointer; display: inline-block; }
+  button.primary, label.btn { background: #1d2127; color: #fff; border: none; }
+  progress { width: 100%; height: 18px; } #log { white-space: pre-wrap; font: 13px/1.5 ui-monospace, Consolas, monospace; }
+  .ok { color: #1a7f37; } .bad { color: #c0392b; } img { max-width: 100%; border: 1px solid #ddd; }
+</style>
+</head>
+<body>
+<h1>Book import test</h1>
+<p><b>What is this?</b> A one-off test for the tablet version of the book reader. It checks that a whole book (the
+3.2 GB zip) can be copied into this page's private storage on the tablet, and then played offline.
+Nothing is uploaded anywhere: the book stays on the device.</p>
+
+<div class="box" id="checks">Checking what this browser supports…</div>
+
+<div class="box">
+  <p><b>Step 1.</b> Pick the book zip (for example <i>Pathophysiology audiobook - reader.zip</i> in Downloads).</p>
+  <label class="btn">Pick the zip<input id="zip" type="file" accept=".zip,application/zip" hidden></label>
+  <p><progress id="bar" value="0" max="1"></progress></p>
+  <div id="prog">Not started.</div>
+</div>
+
+<div class="box">
+  <p><b>Step 2.</b> Play from storage, and jump to 30:00 in a chapter.</p>
+  <button id="play" class="primary">Play test</button>
+  <audio id="audio" controls style="width:100%;margin-top:10px"></audio>
+  <div id="playres"></div>
+  <p><img id="page" alt=""></p>
+</div>
+
+<div class="box">
+  <button id="wipe">Delete the test copy</button> <span id="wiperes"></span>
+</div>
+
+<div class="box"><b>Results</b> (screenshot this for Claude):<div id="log"></div></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const log = (msg, cls) => { const d = document.createElement("div"); d.textContent = msg; if (cls) d.className = cls; $("log").appendChild(d); };
+const MB = 1024 * 1024, GB = 1024 * MB;
+let root = null;
+
+async function checks() {
+  const out = [];
+  const ok = (c, t) => out.push(`<div class="${c ? "ok" : "bad"}">${c ? "✓" : "✗"} ${t}</div>`);
+  ok(window.isSecureContext, "Secure page (needed for private storage)");
+  const hasOPFS = !!(navigator.storage && navigator.storage.getDirectory);
+  ok(hasOPFS, "Private file storage (OPFS) available");
+  let est = null;
+  if (navigator.storage && navigator.storage.estimate) {
+    est = await navigator.storage.estimate();
+    ok(est.quota > 4 * GB, `Storage allowed: ${(est.quota / GB).toFixed(1)} GB (used ${(est.usage / GB).toFixed(2)} GB)`);
+  }
+  let persisted = false;
+  if (navigator.storage && navigator.storage.persist) persisted = await navigator.storage.persist();
+  ok(persisted, "Storage kept permanently (won't be cleared to free space)" + (persisted ? "" : " — may need the page added to the home screen first"));
+  $("checks").innerHTML = out.join("");
+  log(`browser: ${navigator.userAgent}`);
+  log(`secure=${window.isSecureContext} opfs=${hasOPFS} quotaGB=${est ? (est.quota / GB).toFixed(1) : "?"} usedGB=${est ? (est.usage / GB).toFixed(2) : "?"} persisted=${persisted}`);
+  if (hasOPFS) root = await navigator.storage.getDirectory();
+}
+
+// ---- reading a zip made with "store" (no compression), entry by entry, without loading it into memory
+async function bytes(file, start, len) { return new DataView(await file.slice(start, start + len).arrayBuffer()); }
+
+async function entries(file) {
+  const tailLen = Math.min(file.size, 65557 + 20 + 56);
+  const tail = await bytes(file, file.size - tailLen, tailLen);
+  let eocd = -1;
+  for (let i = tailLen - 22; i >= 0; i--) if (tail.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("not a zip file");
+  let count = tail.getUint16(eocd + 10, true), cdSize = tail.getUint32(eocd + 12, true), cdOff = tail.getUint32(eocd + 16, true);
+  if (cdOff === 0xffffffff || count === 0xffff) {                       // ZIP64
+    const loc = eocd - 20;
+    const z64off = Number(tail.getBigUint64(loc + 8, true));
+    const z = await bytes(file, z64off, 56);
+    count = Number(z.getBigUint64(32, true)); cdSize = Number(z.getBigUint64(40, true)); cdOff = Number(z.getBigUint64(48, true));
+  }
+  const cd = await bytes(file, cdOff, cdSize), dec = new TextDecoder();
+  const list = []; let p = 0;
+  for (let n = 0; n < count; n++) {
+    if (cd.getUint32(p, true) !== 0x02014b50) throw new Error("bad zip directory");
+    const method = cd.getUint16(p + 10, true);
+    let size = cd.getUint32(p + 20, true), usize = cd.getUint32(p + 24, true);
+    const nameLen = cd.getUint16(p + 28, true), extraLen = cd.getUint16(p + 30, true), commentLen = cd.getUint16(p + 32, true);
+    let local = cd.getUint32(p + 42, true);
+    const name = dec.decode(new Uint8Array(cd.buffer, cd.byteOffset + p + 46, nameLen));
+    // ZIP64 extra field: real sizes/offset
+    let q = p + 46 + nameLen; const end = q + extraLen;
+    while (q + 4 <= end) {
+      const id = cd.getUint16(q, true), len = cd.getUint16(q + 2, true); let r = q + 4;
+      if (id === 0x0001) {
+        if (usize === 0xffffffff) { usize = Number(cd.getBigUint64(r, true)); r += 8; }
+        if (size === 0xffffffff) { size = Number(cd.getBigUint64(r, true)); r += 8; }
+        if (local === 0xffffffff) { local = Number(cd.getBigUint64(r, true)); r += 8; }
+      }
+      q += 4 + len;
+    }
+    list.push({ name, method, size, local });
+    p = end + commentLen;
+  }
+  return list;
+}
+
+async function fileHandle(path, create) {
+  const parts = path.split("/"); let dir = root;
+  for (const d of parts.slice(0, -1)) dir = await dir.getDirectoryHandle(d, { create });
+  return dir.getFileHandle(parts[parts.length - 1], { create });
+}
+
+async function importZip(file) {
+  const t0 = performance.now();
+  const list = (await entries(file)).filter(e => !e.name.endsWith("/"));
+  const total = list.reduce((s, e) => s + e.size, 0);
+  log(`zip: ${list.length} files, ${(total / GB).toFixed(2)} GB`);
+  const bad = list.filter(e => e.method !== 0);
+  if (bad.length) throw new Error(`${bad.length} files are compressed; the app expects a stored zip`);
+  let done = 0;
+  for (const e of list) {
+    const h = await bytes(file, e.local, 30);
+    const dataStart = e.local + 30 + h.getUint16(26, true) + h.getUint16(28, true);
+    const w = await (await fileHandle("book/" + e.name, true)).createWritable();
+    for (let off = 0; off < e.size; off += 16 * MB) {                 // 16 MB at a time: never the whole file in memory
+      await w.write(file.slice(dataStart + off, dataStart + Math.min(e.size, off + 16 * MB)));
+      done += Math.min(16 * MB, e.size - off);
+      $("bar").value = done / total;
+      const s = (performance.now() - t0) / 1000;
+      $("prog").textContent = `${(done / GB).toFixed(2)} of ${(total / GB).toFixed(2)} GB · ${(done / MB / s).toFixed(0)} MB/s · ${e.name.split("/").pop()}`;
+    }
+    await w.close();
+  }
+  const secs = (performance.now() - t0) / 1000;
+  log(`IMPORT OK: ${(total / GB).toFixed(2)} GB in ${secs.toFixed(0)} s (${(total / MB / secs).toFixed(0)} MB/s)`, "ok");
+  const est = await navigator.storage.estimate();
+  log(`storage now used: ${(est.usage / GB).toFixed(2)} GB of ${(est.quota / GB).toFixed(1)} GB`);
+}
+
+async function findFile(re) {
+  async function walk(dir, path) {
+    for await (const [name, h] of dir.entries()) {
+      const p = path + "/" + name;
+      if (h.kind === "file" && re.test(p)) return h;
+      if (h.kind === "directory") { const r = await walk(h, p); if (r) return r; }
+    }
+    return null;
+  }
+  return walk(root, "");
+}
+
+async function playTest() {
+  const mp3 = await findFile(/\/Audio\/13 [^/]*\.mp3$/) || await findFile(/\/Audio\/[^/]*\.mp3$/);
+  if (!mp3) { $("playres").textContent = "Nothing imported yet."; return; }
+  const f = await mp3.getFile();
+  const a = $("audio"); a.src = URL.createObjectURL(f);
+  await new Promise(r => a.addEventListener("loadedmetadata", r, { once: true }));
+  const target = Math.min(1800, a.duration / 2);
+  a.currentTime = target;
+  try { await a.play(); } catch (e) { log("play() blocked: " + e.message, "bad"); }
+  await new Promise(r => setTimeout(r, 2500));
+  const ok = a.currentTime > target && a.currentTime < target + 5 && !a.paused;
+  const msg = `PLAY ${ok ? "OK" : "PROBLEM"}: ${f.name}, ${(f.size / MB).toFixed(0)} MB, length ${(a.duration / 60).toFixed(1)} min, jumped to ${target.toFixed(0)} s, now at ${a.currentTime.toFixed(1)} s, playing=${!a.paused}`;
+  $("playres").textContent = msg; log(msg, ok ? "ok" : "bad");
+  const pg = await findFile(/\/pages\/p0329\.webp$/) || await findFile(/\/pages\/p\d+\.webp$/);
+  if (pg) { $("page").src = URL.createObjectURL(await pg.getFile()); log("page image from storage: shown below the player", "ok"); }
+}
+
+$("zip").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { await importZip(f); } catch (err) { log("IMPORT FAILED: " + err.message, "bad"); $("prog").textContent = "Failed: " + err.message; }
+};
+$("play").onclick = () => playTest().catch(err => log("PLAY FAILED: " + err.message, "bad"));
+$("wipe").onclick = async () => {
+  try { await root.removeEntry("book", { recursive: true }); $("wiperes").textContent = "Deleted."; }
+  catch (e) { $("wiperes").textContent = "Nothing to delete."; }
+  const est = await navigator.storage.estimate(); log(`after delete: ${(est.usage / GB).toFixed(2)} GB used`);
+};
+// laptop self-test only: ?src=<small zip URL> imports a zip fetched from the same server
+const src = new URLSearchParams(location.search).get("src");
+checks().then(async () => {
+  if (src) { const b = await (await fetch(src)).blob(); await importZip(b); await playTest(); }
+}).catch(e => log("CHECK FAILED: " + e.message, "bad"));
+</script>
+</body>
+</html>

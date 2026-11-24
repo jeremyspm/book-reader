@@ -11,6 +11,7 @@ async function init() {
   }
   root = await navigator.storage.getDirectory();
   books = await root.getDirectoryHandle("books", { create: true });
+  try { await root.removeEntry("book", { recursive: true }); } catch (e) {}   // the old import test's copy, if still there
   if (navigator.storage.persist) await navigator.storage.persist();
   await list();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

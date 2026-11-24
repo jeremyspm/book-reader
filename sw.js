@@ -1,6 +1,6 @@
 /* Offline support: keep the app's own files (never the books, which live in private storage) so it opens
    with no connection. VERSION is stamped by build_site.py; a new version replaces the old cache. */
-const VERSION = "book-reader-1795520303";
+const VERSION = "book-reader-1795520421";
 const FILES = ["./", "index.html", "library.js", "reader.html", "reader.js", "reader.css", "storage-source.js",
                "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 

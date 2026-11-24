@@ -1,5 +1,47 @@
-<!doctype html><html lang="en-NZ"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, nofollow"><title>Book reader</title></head>
-<body style="font-family:system-ui,sans-serif;max-width:640px;margin:30px auto;padding:0 16px">
-<h1>Book reader</h1><p>A private study tool that plays narrated textbooks offline. Nothing to see here yet.</p>
-<p><a href="import-test/">Import test</a></p></body></html>
+<!doctype html>
+<html lang="en-NZ">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1d2127">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<title>Book reader</title>
+<style>
+  :root { font-family: "Segoe UI", system-ui, sans-serif; color: #1d2127; }
+  body { margin: 0; background: #e6e8eb; }
+  header { background: #1d2127; color: #fff; padding: 18px 20px; font-size: 20px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; }
+  .card { background: #fff; border-radius: 12px; padding: 16px 18px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .book { display: flex; align-items: center; gap: 14px; }
+  .book a.open { flex: 1; text-decoration: none; color: inherit; }
+  .book .t { font-size: 18px; font-weight: 600; } .muted { color: #69717d; font-size: 14px; }
+  button, label.btn { font: inherit; font-size: 16px; padding: 12px 18px; border-radius: 10px; border: 1px solid #c9cdd3; background: #fff; cursor: pointer; display: inline-block; }
+  .primary, label.btn { background: #1d2127; color: #fff; border: none; }
+  .remove { color: #b3261e; border-color: #e3b9b5; }
+  progress { width: 100%; height: 16px; } #help { font-size: 15px; line-height: 1.5; } #help[hidden] { display: none; }
+  .icon { width: 40px; height: 40px; border-radius: 50%; padding: 0; background: transparent; color: #fff; border: 1px solid #555c66; }
+</style>
+</head>
+<body>
+<header>Book reader <button id="helpBtn" class="icon" aria-label="What is this?">?</button></header>
+<main>
+  <div id="help" class="card" hidden>
+    <p><b>What is this?</b> Your narrated textbooks, offline. Each book is the real pages plus its narration:
+      tap any word and it reads from there, highlighting the sentence as it goes.</p>
+    <p><b>Adding a book:</b> copy the book's reader zip (for example <i>Pathophysiology audiobook - reader.zip</i>)
+      onto this device, then tap <b>Import a book</b> and pick it. It's copied into this app's private storage,
+      so you can delete the zip afterwards. Nothing is uploaded anywhere.</p>
+    <p><b>Listening with the screen off:</b> use the controls on the lock screen or in the notification shade.</p>
+  </div>
+  <div id="books"></div>
+  <div class="card">
+    <label class="btn">Import a book<input id="zip" type="file" accept=".zip,application/zip" hidden></label>
+    <div id="importing" hidden><p><progress id="bar" value="0" max="1"></progress></p><div id="prog" class="muted"></div></div>
+  </div>
+  <p id="storage" class="muted"></p>
+</main>
+<script src="library.js?v=1795520303"></script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en-NZ">
+<head>
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1d2127">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Book reader</title>
+<link rel="stylesheet" href="reader.css?v=1795520303">
+</head>
+<body>
+<aside id="side">
+  <div class="brand">
+    <span id="bookTitle">Book reader</span>
+    <span>
+      <a id="libraryLink" class="libraryLink" href="#" hidden>Library</a>
+      <button id="helpBtn" class="icon" title="What is this?" aria-label="What is this?">?</button>
+    </span>
+  </div>
+  <div id="help" hidden>
+    <p><b>What is this?</b> The book's own pages, with its narration ready to play.</p>
+    <p><b>Click any word</b> on a page and the narration starts from that word. The sentence being read is
+      highlighted and the page follows along.</p>
+    <p><b>Keys:</b> Space plays or pauses. ← and → go back or forward one sentence. On a tablet, the lock-screen controls do the same.</p>
+    <p>Greyed-out text, like figure labels and tables, isn't read aloud. Your place is remembered.</p>
+  </div>
+  <nav id="chapters" aria-label="Chapters"></nav>
+</aside>
+<main id="pages" tabindex="-1"></main>
+<div id="toast" role="status" hidden></div>
+<button id="follow" hidden>↓ Back to where it's reading</button>
+<footer id="bar">
+  <button id="menuBtn" class="icon" title="Chapters" aria-label="Chapters">☰</button>
+  <button id="back" class="icon" title="Back one sentence (←)" aria-label="Back one sentence">⏮</button>
+  <button id="play" class="play" title="Play or pause (Space)" aria-label="Play">▶</button>
+  <button id="fwd" class="icon" title="Forward one sentence (→)" aria-label="Forward one sentence">⏭</button>
+  <div class="where">
+    <div id="nowTitle">Click any word on a page to start listening</div>
+    <div class="seekrow">
+      <span id="tNow">0:00</span>
+      <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Position in chapter">
+      <span id="tEnd">0:00</span>
+    </div>
+  </div>
+  <label class="toggle" title="Grey out text that isn't read aloud (figure labels, tables, boxes)">
+    <input id="greyToggle" type="checkbox" checked> Grey unread text
+  </label>
+  <label class="speed">Speed
+    <select id="speed">
+      <option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option>
+      <option value="1.5">1.5×</option><option value="1.75">1.75×</option><option value="2">2×</option>
+    </select>
+  </label>
+</footer>
+<audio id="audio" preload="auto"></audio>
+<script src="storage-source.js?v=1795520303"></script>
+<script src="reader.js?v=1795520303"></script>
+</body>
+</html>
